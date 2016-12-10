@@ -6,4 +6,4 @@ This program will test the speed of your runners by having it run 100 maps taken
 Usage:
 * Compile the Arena using the Makefile
 * Compile your AI (as is from CodinGame)
-* Run the Arena with the name of your AI's binary as a parameter
+* Run the Arena with the name of your AI's binary as a parameter (e.g: Arena MyAI-V23)
