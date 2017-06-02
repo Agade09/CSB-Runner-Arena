@@ -313,7 +313,7 @@ int Play_Game(array <string,N> &Bot_Names){
 					ss << Bot[i].p.r << " " << round(Bot[i].p.v.x) << " " << round(Bot[i].p.v.y) << " " << round(Bot[i].p.angle) << " " << Bot[i].p.next << endl;
 				}
 				for(int j=0;j<2;++j){//Feed fake far away opponent position
-					ss << -10000 << " " << -10000 << " " << 0 << " " << 0 << " " << 0 << " " << 1 << endl;
+					ss << -10000+1000*j << " " << -10000 << " " << 0 << " " << 0 << " " << 0 << " " << 1 << endl;
 				}
 				try{
 					Bot[i].Feed_Inputs(ss.str());
