@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <cstdio>
 #include <vector>
 #include <cmath>
@@ -372,7 +373,7 @@ int main(int argc,char **argv){
 	}
 	signal(SIGTERM,StopArena);//Register SIGTERM signal handler so the arena can cleanup when you kill it
     signal(SIGPIPE,SIG_IGN);//Ignore SIGPIPE to avoid the arena crashing when an AI crashes
-	int maps_done{0};
+	int maps_done{0},maps_failed{0};
 	double average_turns{0};
 	#pragma omp parallel num_threads(N_Threads) shared(average_turns,maps_done,Bot_Names)
 	while(!stop){
@@ -382,9 +383,10 @@ int main(int argc,char **argv){
 			average_turns+=(turns-average_turns)/(++maps_done);
 		}
 		else{
-			cerr << "Bot didn't complete map" << endl;
+            ++maps_failed;
+			//cerr << "Bot didn't complete map" << endl;
 		}
 		#pragma omp critical
-		cerr << "Average turns: " << average_turns << " with " << maps_done << " maps done " << endl;
+		cerr << "Average turns: " << setprecision(5) << average_turns << " with " << maps_done << " maps done with " << setprecision(2) << 100.0*maps_failed/(maps_failed+maps_done) << "% maps failed" << endl;
 	}
 }
