@@ -225,6 +225,8 @@ void Make_Move(const string &MoveStr,AI &Bot,const map &C,const int turn){
     p.r.x+=round(new_v.x);
     p.r.y+=round(new_v.y);
     p.v=new_v*0.85;
+    p.v.x=static_cast<int>(p.v.x);
+    p.v.y=static_cast<int>(p.v.y);
     --p.time;
 }
 
