@@ -246,8 +246,11 @@ inline string EmptyPipe(const int fd){
 bool IsValidMove(const string &Move){
 	stringstream ss(Move);
 	for(int i=0;i<2;++i){
+        string line;
+        getline(ss,line);
+        stringstream ss2(line);
 		action PodMove;
-		if(!(ss >> PodMove.t >> PodMove.thrust)){
+		if(!(ss2 >> PodMove.t >> PodMove.thrust)){
 			return false;
 		}
 	}
