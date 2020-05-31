@@ -1,85 +1,29 @@
-#include <iostream>
-#include <iomanip>
-#include <cstdio>
-#include <vector>
-#include <cmath>
-#include <array>
-#include <fstream>
-#include <random>
-#include <chrono>
-#include <sstream>
+#include <bits/stdc++.h>
+#include <include/SR_Engine.cpp>
+#include <include/vec.cpp>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 #include <poll.h>
 #include <omp.h>
-#include <algorithm>
-#include <thread>
+#define TESTS
 using namespace std;
 using namespace std::chrono;
 
-struct vec{
-    double x,y;
-    inline bool operator!=(const vec &a)const noexcept{
-        return x!=a.x || y!=a.y;
-    }
-    inline void operator+=(const vec &a)noexcept{
-        x+=a.x;
-        y+=a.y;
-    }
-    inline double norm2()const noexcept{
-        return pow(x,2)+pow(y,2);
-    }
-    inline double norm()const noexcept{
-        return sqrt(norm2());
-    }
-    inline vec operator+(const vec &a)const noexcept{
-        return vec{x+a.x,y+a.y};
-    }
-    inline vec operator-(const vec &a)const noexcept{
-        return vec{x-a.x,y-a.y};
-    }
-    inline vec operator*(const double &a)const noexcept{
-        return vec{x*a,y*a};
-    }
-};
-
-inline ostream& operator<<(ostream &os,const vec &r)noexcept{
-    os << r.x << " " << r.y;
-    return os;
-}
-
-inline istream& operator>>(istream &is,vec &r)noexcept{
-    is >> r.x >> r.y;
-    return is;
-}
-
-struct action{
-    vec t;
-    string thrust;
-};
-
-typedef vector<vec> map;
-
+constexpr bool tests{true};
+constexpr bool Make_Replays{false};
 constexpr int PIPE_READ{0},PIPE_WRITE{1};
-constexpr int N_L{3},N{1};
-constexpr double DegToRad{M_PI/180.0};
+constexpr int N{1};
 constexpr bool Debug_AI{false},Timeout{false};
 constexpr double FirstTurnTime{1*(Timeout?1:10)},TimeLimit{0.15*(Timeout?1:10)};
-const vector<map> Maps{{{12460,1350},{10540,5980},{3580,5180},{13580,7600}},{{3600,5280},{13840,5080},{10680,2280},{8700,7460},{7200,2160}},{{4560,2180},{7350,4940},{3320,7230},{14580,7700},{10560,5060},{13100,2320}},{{5010,5260},{11480,6080},{9100,1840}},{{14660,1410},{3450,7220},{9420,7240},{5970,4240}},{{3640,4420},{8000,7900},{13300,5540},{9560,1400}},{{4100,7420},{13500,2340},{12940,7220},{5640,2580}},{{14520,7780},{6320,4290},{7800,860},{7660,5970},{3140,7540},{9520,4380}},{{10040,5970},{13920,1940},{8020,3260},{2670,7020}},{{7500,6940},{6000,5360},{11300,2820}},{{4060,4660},{13040,1900},{6560,7840},{7480,1360},{12700,7100}},{{3020,5190},{6280,7760},{14100,7760},{13880,1220},{10240,4920},{6100,2200}},{{10323,3366},{11203,5425},{7259,6656},{5425,2838}}};
+constexpr char Replay_Filename[]{"Replay.txt"};
+default_random_engine generator(system_clock::now().time_since_epoch().count());
 
 bool stop{false};//Global flag to stop all arena threads when SIGTERM is received
-
-struct pod{
-    vec r,v;
-    int next,lap,time;
-    double angle;
-};
 
 struct AI{
     int id,pid,outPipe,errPipe,inPipe;
     string name;
-    pod p;
     inline void stop(){
         if(alive()){
             kill(pid,SIGTERM);
@@ -165,71 +109,6 @@ void StartProcess(AI &Bot){
     }
 }
 
-inline double Angular_Distance(const double a,const double b)noexcept{
-    double diff{abs(a-b)};
-    return min(diff,360-diff);
-}
-
-inline double Angle_Sum(const double a,const double b)noexcept{
-    double sum{a+b};
-    return sum+(sum>360?-360:sum<0?360:0);
-}
-
-inline double Angle(const vec &d)noexcept{
-    double n{d.norm()};
-    double a{acos(d.x/n)*180/M_PI};
-    if(d.y<0){
-        a=360-a;
-    }
-    return n>0?a:0;
-}
-
-inline double Closest_Angle(const double a,const double t){
-    if(Angular_Distance(a,t)<=18){
-        return t;
-    }
-    else{
-        double a1{Angle_Sum(a,18.0)},a2{Angle_Sum(a,-18.0)};
-        return Angular_Distance(a1,t)<Angular_Distance(a2,t)?a1:a2;
-    }
-}
-
-inline bool Passes_Checkpoint(const vec &r,const vec &v,const vec &t){
-    double Rx{static_cast<double>(r.x-t.x)},Ry{static_cast<double>(r.y-t.y)},R2{Rx*Rx+Ry*Ry};
-    double RV{Rx*v.x+Ry*v.y},V2{v.x*v.x+v.y*v.y},det{RV*RV-V2*(R2-600*600)};
-    return RV<0.0 && det>=0.0 && -(RV+sqrt(det))/V2<1;
-}
-
-void Make_Move(const string &MoveStr,AI &Bot,const map &C,const int turn){
-    stringstream ss(MoveStr);
-    action Move;
-    ss >> Move.t >> Move.thrust;
-    pod &p=Bot.p;
-    if(Move.thrust=="SHIELD"){
-        cerr << "Found SHIELD" << endl;
-    }
-    const int thrust{Move.thrust=="BOOST"?650:Move.thrust=="SHIELD"?0:stoi(Move.thrust)};
-    const double desired_angle{Angle(Move.t-p.r)};
-    p.angle=turn==1?desired_angle:Closest_Angle(p.angle,desired_angle);
-    vec new_v{p.v+vec{cos(p.angle*DegToRad),sin(p.angle*DegToRad)}*thrust};
-    if(Passes_Checkpoint(p.r,new_v,C[p.next])){
-        p.time=100;
-        ++p.next;
-        if(p.next==C.size()){
-            p.next=0;
-        }
-        else if(p.next==1){
-            ++p.lap;
-        }
-    }
-    p.r.x+=round(new_v.x);
-    p.r.y+=round(new_v.y);
-    p.v=new_v*0.85;
-    p.v.x=static_cast<int>(p.v.x);
-    p.v.y=static_cast<int>(p.v.y);
-    --p.time;
-}
-
 inline string EmptyPipe(const int fd){
     int nbytes;
     if(ioctl(fd,FIONREAD,&nbytes)<0){
@@ -245,14 +124,13 @@ inline string EmptyPipe(const int fd){
 
 bool IsValidMove(const string &Move){
     stringstream ss(Move);
-    for(int i=0;i<2;++i){
-        string line;
-        getline(ss,line);
-        stringstream ss2(line);
-        action PodMove;
-        if(!(ss2 >> PodMove.t >> PodMove.thrust)){
-            return false;
-        }
+    string line;
+    getline(ss,line);
+    stringstream ss2(line);
+    vec target;
+    int thrust;
+    if(!(ss2 >> target >> thrust)){
+        return false;
     }
     return true;
 }
@@ -273,71 +151,118 @@ string GetMove(AI &Bot,const int turn){
     throw(1);
 }
 
-inline map Generate_Map()noexcept{
-    default_random_engine generator(system_clock::now().time_since_epoch().count());
+inline Map Generate_Map(default_random_engine &generator)noexcept{
     uniform_int_distribution<int> Map_Distrib(0,Maps.size()-1);
-    map C{Maps[Map_Distrib(generator)]};
-    uniform_int_distribution<int> Rotate_Distrib(0,C.size()-1),Delta_Distrib(-30,30);
-    rotate(C.begin(),C.begin()+Rotate_Distrib(generator),C.end());
-    for(vec &cp:C){
-        cp+=vec{static_cast<double>(Delta_Distrib(generator)),static_cast<double>(Delta_Distrib(generator))};
-    }
+    Map C{Maps[Map_Distrib(generator)]};
     return C;
 }
 
+state Random_Initial_State(){
+    state S;
+    S.timeout=Timeout_Length;
+    S.C=Generate_Map(generator);
+    vec CP0_CP1{S.C[1]-S.C[0]};
+    CP0_CP1.normalise();
+    const float angle{static_cast<float>(Angle(S.C[1]-S.C[0]))};
+    S.p=pod{S.C[0],vec{0,0},angle,1,0};
+    return S;
+}
+
+action StringToAction(const string &mv_str,const pod &p){
+    stringstream ss(mv_str);
+    action mv;
+    int thrust;
+    vec target;
+    ss >> target >> thrust;
+    mv.thrust=thrust;
+    double desired_angle{Angle(target-p.r)};
+    const double angle_given{Closest_Angle(p.angle,desired_angle)};
+    /*ASSERT(thrust>=0 && thrust<=200,"Invalid thrust in StringToAction()");
+    ASSERT(abs(Angular_Distance(desired_angle,p.angle))<19,"Requested delta_angle is "+to_string(abs(Angular_Distance(desired_angle,p.angle)))+" in StringToAction()");*/
+    /*if(abs(Angular_Distance(desired_angle,p.angle))>18+1e-3){
+        cerr << "Warning: Delta angle : " << Angular_Distance(desired_angle,p.angle) << endl;
+        cerr << "Desired: " << desired_angle << " Current: " << p.angle << " Given: " << angle_given << endl;
+    }*/
+    const double angle_dist{Angular_Distance(angle_given,p.angle)};
+    mv.delta_angle=Angular_Distance(desired_angle,Angle_Sum(p.angle,angle_dist))<Angular_Distance(desired_angle,Angle_Sum(p.angle,-angle_dist))?angle_dist:-angle_dist;
+    if(tests && Angular_Distance(desired_angle,Angle_Sum(p.angle,mv.delta_angle))>1){
+        cerr << "Target to delta_angle conversion is dodgy " << setprecision(3) << p.angle  << " " << angle_given << " " << mv.delta_angle << endl;
+    }
+    if(tests && abs(mv.delta_angle)>18+1e-3){
+        cerr << "Error: Delta angle : " << mv.delta_angle << endl;
+        cerr << "Desired: " << desired_angle << " Current: " << p.angle << " Given: " << angle_given << endl;
+    }
+    return mv;
+}
+
 int Play_Game(array <string,N> &Bot_Names){
-    map C=Generate_Map();
+    state S{Random_Initial_State()};
     vector<AI> Bot(Bot_Names.size());
-    for(int i=0;i<Bot_Names.size();++i){
-        Bot[i].id=i;
-        Bot[i].name=Bot_Names[i];
-        StartProcess(Bot[i]);
-        Bot[i].p.r=C[0];
-        Bot[i].p.v=vec{0,0};
-        Bot[i].p.lap=0;
-        Bot[i].p.next=1;
-        Bot[i].p.angle=Angle(C[1]-C[0]);//Could do better?
-        Bot[i].p.time=100;
+    for(int id=0;id<Bot_Names.size();++id){
+        Bot[id].id=id;
+        Bot[id].name=Bot_Names[id];
+        StartProcess(Bot[id]);
     }
     int turn{0};
     //Feed first turn inputs
     for(AI &b:Bot){
         stringstream ss;
-        ss << N_L << endl << C.size() << endl;
-        for(const vec &cp:C){
-            ss << cp << endl;
+        ss << S.C.size()*3 << endl;
+        for(int i=0;i<3;++i){
+            for(int j=1;j<=S.C.size();++j){
+                ss << S.C[j%S.C.size()] << endl;
+            }
         }
         b.Feed_Inputs(ss.str());
+        //cerr << ss.str();
     }
     while(++turn>0 && !stop){
-        for(int i=0;i<Bot.size();++i){
-            if(Bot[i].alive()){
+        for(int id=0;id<Bot.size();++id){
+            if(Bot[id].alive()){
                 //Feed turn inputs
                 stringstream ss;
-                for(int j=0;j<2;++j){//Duplicate pod info
-                    ss << Bot[i].p.r << " " << round(Bot[i].p.v.x) << " " << round(Bot[i].p.v.y) << " " << round(Bot[i].p.angle) << " " << Bot[i].p.next << endl;
-                }
-                for(int j=0;j<2;++j){//Feed fake far away opponent position
-                    ss << -10000+1000*j << " " << -10000 << " " << 0 << " " << 0 << " " << 0 << " " << 1 << endl;
-                }
+                ss << (S.p.next-1+(S.p.lap+(S.p.next==0?1:0))*S.C.size()) << " " << round(S.p.r.x) << " " << round(S.p.r.y) << " " << round(S.p.v.x) << " " << round(S.p.v.y) << " " << round(S.p.angle) << endl;
+                //cerr << ss.str();
                 try{
-                    Bot[i].Feed_Inputs(ss.str());
-                    string Move{GetMove(Bot[i],turn)};
-                    string err_str{EmptyPipe(Bot[i].errPipe)};
+                    Bot[id].Feed_Inputs(ss.str());
+                    string Move{GetMove(Bot[id],turn)};
+                    string err_str{EmptyPipe(Bot[id].errPipe)};
                     if(Debug_AI){
                         ofstream err_out("log.txt",ios::app);
                         err_out << err_str << endl;
                     }
-                    Make_Move(Move,Bot[i],C,turn);
-                    if(Bot[i].p.lap==N_L){
-                        return turn;
+                    //cerr << Move;
+                    const action mv{StringToAction(Move,S.p)};
+                    ofstream replay_os{Replay_Filename,ios::app};
+                    if(Make_Replays && omp_get_thread_num()==0){
+                        for(const vec &base:S.C){
+                            replay_os << base << " ";
+                        }
+                        replay_os << endl;
+                        replay_os << S.p.r << " " << S.p.angle << " " << S.p.v << " " << S.p.next << endl;
+                        replay_os << mv << endl;
                     }
-                    else if(Bot[i].p.time==0){
-                        return -2;
+                    Simulate(S,mv);
+                    if(S.game_over()){
+                        return S.finished_race()?S.turn:-2;
                     }
                 }
-                catch(...){
-                    cerr << "Loss by timeout" << endl;
+                catch(int ex){
+                    if(ex==1){//Timeout
+                        cerr << "Loss by Timeout of AI " << Bot[id].id << " name: " << Bot[id].name << endl;
+                    }
+                    else if(ex==3){
+                        cerr << "Invalid move from AI " << Bot[id].id << " name: " << Bot[id].name << endl;
+                    }
+                    else if(ex==4){
+                        cerr << "Error emptying pipe of AI " << Bot[id].name << endl;
+                    }
+                    else if(ex==5){
+                        cerr << "AI " << Bot[id].name << " died before being able to give it inputs" << endl;
+                    }
+                    else{
+                        cerr << "AI " << Bot[id].name << " stopped after throw int " << ex << endl;
+                    }
                     return -1;
                 }
             }
