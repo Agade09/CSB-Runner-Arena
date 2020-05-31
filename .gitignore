@@ -3,3 +3,9 @@
 !README.md
 !Makefile
 !Arena.cpp
+!include/
+
+include/*
+!include/assert.cpp
+!include/SR_Engine.cpp
+!include/vec.cpp

@@ -317,6 +317,6 @@ int main(int argc,char **argv){
             //cerr << "Bot didn't complete map" << endl;
         }
         #pragma omp critical
-        cerr << "Average turns: " << setprecision(5) << average_turns << " with " << maps_done << " maps done with " << setprecision(2) << 100.0*maps_failed/(maps_failed+maps_done) << "% maps failed" << endl;
+        cerr << "Average turns: " << setprecision(5) << average_turns << " with " << maps_done << " maps done with " << setprecision(2) << 100.0*maps_failed/(maps_failed+maps_done) << "% maps failed. Submission score: " << setprecision(9) << average_turns*50 << endl;
     }
 }
